@@ -1,23 +1,24 @@
 #!/usr/bin/env python
 
+import logging.config
+import os
+
 from flask import Flask, request, render_template, flash
 import netaddr
 from netaddr import AddrFormatError
 from wakeonlan import wol
-from wtforms.fields.core import StringField
-from wtforms.validators import InputRequired, ValidationError
-from flask_wtf import Form
-import logging.config, yaml
+import yaml
 
 APP_ADDRESS = "0.0.0.0"
-APP_PORT = 5080
+APP_PORT = int(os.environ.get("APP_PORT", "5080"))
+APP_DEBUG = os.environ.get("FLASK_DEBUG", "1") == "1"
+WOL_BROADCAST_IP = os.environ.get("WOL_BROADCAST_IP", "255.255.255.255")
 
 app = Flask(__name__)
 app.secret_key = b'\xf4\x8f\x98>\xdd\x80Y{\xf7M\x163s|A_\xec\x1a\x04\xcf\xb4\x14\xf0\x14'
 
-file = open('devices.yml')
-config = yaml.load(file)
-file.close()
+with open('devices.yml') as devices_file:
+    config = yaml.safe_load(devices_file)
 
 
 def get_devices_safe():
@@ -72,7 +73,7 @@ def index():
             device = get_device(bare)
             if secret == device['secret']:
                 flash("Waking up...")
-                wol.send_magic_packet(bare)
+                wol.send_magic_packet(bare, ip_address=WOL_BROADCAST_IP)
                 app.logger.debug("Waking up %s" % address)
             else:
                 flash("Incorrect secret")
@@ -85,6 +86,6 @@ def index():
 
 if __name__ == '__main__':
     with open('logging.yml') as logfile:
-        logconfig = yaml.load(logfile)
+        logconfig = yaml.safe_load(logfile)
         logging.config.dictConfig(logconfig)
-    app.run(debug=True, host=APP_ADDRESS, port=APP_PORT)
+    app.run(debug=APP_DEBUG, host=APP_ADDRESS, port=APP_PORT)
